@@ -229,12 +229,12 @@ class User {
       }
       const responseUser = admin
         ? (() => {
-            const o = currentUser.toObject
-              ? currentUser.toObject()
-              : currentUser;
-            delete o.password;
-            return o;
-          })()
+          const o = currentUser.toObject
+            ? currentUser.toObject()
+            : currentUser;
+          delete o.password;
+          return o;
+        })()
         : toSafeUser(currentUser);
       return res
         .status(STATUS.OK)

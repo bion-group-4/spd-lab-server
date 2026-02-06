@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const productModel = require("../models/products");
 const { uploadImage, deleteImage } = require("../utils/imageStorage");
 const { STATUS, MSG } = require("../utils/http");
@@ -219,6 +220,11 @@ class Product {
       return res
         .status(STATUS.BAD_REQUEST)
         .json({ error: MSG.REQUIRED_FIELDS });
+    }
+    if (!mongoose.Types.ObjectId.isValid(String(pId))) {
+      return res
+        .status(STATUS.BAD_REQUEST)
+        .json({ error: "Invalid product id" });
     } else {
       try {
         let singleProduct = await productModel
@@ -288,48 +294,133 @@ class Product {
   }
 
   async getWishProduct(req, res) {
-    let { productArray } = req.body;
-    if (!productArray) {
-      return res
-        .status(STATUS.BAD_REQUEST)
-        .json({ error: MSG.REQUIRED_FIELDS });
-    } else {
-      try {
-        let wishProducts = await productModel.find({
-          _id: { $in: productArray },
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(STATUS.BAD_REQUEST).json({
+        error: "Provide items ({ productId }[])",
+      });
+    }
+
+    if (items.length > 500) {
+      return res.status(STATUS.BAD_REQUEST).json({
+        error: "Too many wishlist items (max 500).",
+      });
+    }
+
+    // Validate + de-duplicate (preserve order)
+    const orderedIds = [];
+    const seen = new Set();
+    for (const it of items) {
+      const raw = (it && (it.productId || it._id || it.id)) || "";
+      const rawId = raw && typeof raw === "object" ? raw._id || raw.id : raw;
+      const id = String(rawId || "").trim();
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(STATUS.BAD_REQUEST).json({
+          error: `Invalid productId: ${rawId}`,
         });
-        if (wishProducts) {
-          return res.status(STATUS.OK).json({ Products: wishProducts });
-        }
-      } catch (err) {
-        console.log(err);
-        return res
-          .status(STATUS.SERVER_ERROR)
-          .json({ error: "Filter product wrong" });
       }
+      if (!seen.has(id)) {
+        seen.add(id);
+        orderedIds.push(id);
+      }
+    }
+
+    try {
+      const products = await productModel.find({ _id: { $in: orderedIds } });
+      const productById = new Map(
+        products.map((p) => [String(p._id), p.toObject ? p.toObject() : p])
+      );
+
+      const Products = orderedIds
+        .map((id) => productById.get(String(id)) || null)
+        .filter(Boolean);
+
+      const missingIds = orderedIds.filter(
+        (id) => !productById.has(String(id))
+      );
+
+      return res.status(STATUS.OK).json({
+        Products,
+        ...(missingIds.length ? { missingIds } : {}),
+      });
+    } catch (err) {
+      console.log(err);
+      return res
+        .status(STATUS.SERVER_ERROR)
+        .json({ error: "Wish product wrong" });
     }
   }
 
   async getCartProduct(req, res) {
-    let { productArray } = req.body;
-    if (!productArray) {
-      return res
-        .status(STATUS.BAD_REQUEST)
-        .json({ error: MSG.REQUIRED_FIELDS });
-    } else {
-      try {
-        let cartProducts = await productModel.find({
-          _id: { $in: productArray },
+    const { items } = req.body;
+
+    // Payload:
+    // { "items": [ { "productId": "<id>", "quantity": 2 }, ... ] }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(STATUS.BAD_REQUEST).json({
+        error: "Provide items ({ productId, quantity }[])",
+      });
+    }
+
+    // Basic guardrails
+    if (items.length > 200) {
+      return res.status(STATUS.BAD_REQUEST).json({
+        error: "Too many cart items (max 200).",
+      });
+    }
+
+    // Validate + de-duplicate (sum quantities)
+    const quantityById = new Map();
+    const orderedIds = [];
+    for (const it of items) {
+      // Accept productId as a string, or as an object like { _id: "..." }.
+      const raw = (it && (it.productId || it._id || it.id)) || "";
+      const rawId = raw && typeof raw === "object" ? raw._id || raw.id : raw;
+      const id = String(rawId || "").trim();
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(STATUS.BAD_REQUEST).json({
+          error: `Invalid productId: ${rawId}`,
         });
-        if (cartProducts) {
-          return res.status(STATUS.OK).json({ Products: cartProducts });
-        }
-      } catch (err) {
-        console.log(err);
-        return res
-          .status(STATUS.SERVER_ERROR)
-          .json({ error: "Cart product wrong" });
       }
+      const qtyRaw = it && it.quantity;
+      const qty = Number.isFinite(Number(qtyRaw)) ? Number(qtyRaw) : 1;
+      if (qty <= 0) {
+        return res
+          .status(STATUS.BAD_REQUEST)
+          .json({ error: `Invalid quantity for ${id}. Must be > 0.` });
+      }
+      if (!quantityById.has(id)) orderedIds.push(id);
+      quantityById.set(id, (quantityById.get(id) || 0) + qty);
+    }
+
+    try {
+      const products = await productModel.find({ _id: { $in: orderedIds } });
+      const productById = new Map(
+        products.map((p) => [String(p._id), p.toObject ? p.toObject() : p])
+      );
+
+      const Products = orderedIds
+        .map((id) => {
+          const p = productById.get(String(id));
+          if (!p) return null;
+          return { ...p, cartQuantity: quantityById.get(String(id)) };
+        })
+        .filter(Boolean);
+
+      const missingIds = orderedIds.filter(
+        (id) => !productById.has(String(id))
+      );
+
+      return res.status(STATUS.OK).json({
+        Products,
+        ...(missingIds.length ? { missingIds } : {}),
+      });
+    } catch (err) {
+      console.log(err);
+      return res
+        .status(STATUS.SERVER_ERROR)
+        .json({ error: "Cart product wrong" });
     }
   }
 

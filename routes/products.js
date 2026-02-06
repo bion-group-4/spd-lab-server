@@ -9,7 +9,6 @@ var storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 router.get("/", productController.getAllProduct);
-router.get("/:id", productController.getSingleProduct);
 
 router.post(
   "/",
@@ -18,6 +17,7 @@ router.post(
   upload.any(),
   productController.postAddProduct
 );
+
 router.put(
   "/:id",
   loginCheck,
@@ -39,5 +39,7 @@ router.post("/cart", productController.getCartProduct);
 
 router.post("/:id/reviews", productController.postAddReview);
 router.delete("/:productId/reviews/:reviewId", productController.deleteReview);
+
+router.get("/:id", productController.getSingleProduct);
 
 module.exports = router;

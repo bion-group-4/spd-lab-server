@@ -33,9 +33,6 @@ const paymentRouter = require("./routes/payment");
 const orderRouter = require("./routes/orders");
 const usersRouter = require("./routes/users");
 const customizeRouter = require("./routes/customize");
-// // Import Auth middleware for check user login or not~
-// const { loginCheck } = require("./middleware/auth");
-// const setupUploadFolders = require("./utils/setupUploadFolders");
 const connectDB = require("./config/db");
 
 /* Create All Uploads Folder if not exists | For Uploading Images */

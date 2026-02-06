@@ -32,8 +32,6 @@ router.delete(
   productController.getDeleteProduct
 );
 
-router.post("/search/category", productController.getProductByCategory);
-router.post("/search/price", productController.getProductByPrice);
 router.post("/wish", productController.getWishProduct);
 router.post("/cart", productController.getCartProduct);
 

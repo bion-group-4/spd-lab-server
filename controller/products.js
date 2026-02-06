@@ -23,14 +23,34 @@ class Product {
 
   async getAllProduct(req, res) {
     try {
-      let Products = await productModel
-        .find({})
+      const { category, maxPrice } = req.query;
+
+      const filter = {};
+      if (category !== undefined) {
+        if (!mongoose.Types.ObjectId.isValid(String(category))) {
+          return res
+            .status(STATUS.BAD_REQUEST)
+            .json({ error: "Invalid category id" });
+        }
+        filter.pCategory = category;
+      }
+
+      if (maxPrice !== undefined) {
+        const parsed = Number(maxPrice);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          return res
+            .status(STATUS.BAD_REQUEST)
+            .json({ error: "maxPrice must be a non-negative number" });
+        }
+        filter.pPrice = { $lte: parsed };
+      }
+
+      const Products = await productModel
+        .find(filter)
         .populate("pCategory", "_id cName")
         .sort({ _id: -1 });
-      if (Products) {
-        return res.status(STATUS.OK).json({ Products });
-      }
-      return res.status(STATUS.OK).json({ Products: [] });
+
+      return res.status(STATUS.OK).json({ Products: Products || [] });
     } catch (err) {
       console.log(err);
       return res
@@ -247,25 +267,29 @@ class Product {
   }
 
   async getProductByCategory(req, res) {
-    let { catId } = req.body;
+    const catId = req.params.catId || req.body.catId;
     if (!catId) {
       return res
         .status(STATUS.BAD_REQUEST)
         .json({ error: MSG.REQUIRED_FIELDS });
-    } else {
-      try {
-        let products = await productModel
-          .find({ pCategory: catId })
-          .populate("pCategory", "cName");
-        if (products) {
-          return res.status(STATUS.OK).json({ Products: products });
-        }
-      } catch (err) {
-        console.log(err);
-        return res
-          .status(STATUS.SERVER_ERROR)
-          .json({ error: "Search product wrong" });
-      }
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(String(catId))) {
+      return res
+        .status(STATUS.BAD_REQUEST)
+        .json({ error: "Invalid category id" });
+    }
+
+    try {
+      const products = await productModel
+        .find({ pCategory: catId })
+        .populate("pCategory", "cName");
+      return res.status(STATUS.OK).json({ Products: products || [] });
+    } catch (err) {
+      console.log(err);
+      return res
+        .status(STATUS.SERVER_ERROR)
+        .json({ error: "Search product wrong" });
     }
   }
 

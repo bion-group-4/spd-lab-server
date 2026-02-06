@@ -104,79 +104,83 @@ class Product {
 
   async postEditProduct(req, res) {
     const pId = req.params.id || req.body.pId;
-    let {
-      pName,
-      pDescription,
-      pPrice,
-      pQuantity,
-      pCategory,
-      pOffer,
-      pStatus,
-      pImages,
-    } = req.body;
+    let { pName, pDescription, pPrice, pQuantity, pCategory, pOffer, pStatus } =
+      req.body;
     const editImages = req.files || [];
 
-    // Validate other fileds
-    if (
-      !pId |
-      !pName |
-      !pDescription |
-      !pPrice |
-      !pQuantity |
-      !pCategory |
-      !pOffer |
-      !pStatus
-    ) {
+    if (!pId) {
       return res
         .status(STATUS.BAD_REQUEST)
-        .json({ error: MSG.REQUIRED_FIELDS });
+        .json({ error: "Product id is required" });
     }
-    // Validate Name and description
-    else if (pName.length > 255 || pDescription.length > 3000) {
+
+    // Validate Update Images (either 0 or 2 images)
+    if (editImages && editImages.length === 1) {
+      return res
+        .status(STATUS.BAD_REQUEST)
+        .json({ error: "Must need to provide 2 images" });
+    }
+
+    // Build partial update object (only update provided fields)
+    let editData = {};
+    if (pName !== undefined) editData.pName = pName;
+    if (pDescription !== undefined) editData.pDescription = pDescription;
+    if (pPrice !== undefined) editData.pPrice = pPrice;
+    if (pQuantity !== undefined) editData.pQuantity = pQuantity;
+    if (pCategory !== undefined) editData.pCategory = pCategory;
+    if (pOffer !== undefined) editData.pOffer = pOffer;
+    if (pStatus !== undefined) editData.pStatus = pStatus;
+
+    // Validate Name and description only when provided
+    if (
+      (pName !== undefined && pName.length > 255) ||
+      (pDescription !== undefined && pDescription.length > 3000)
+    ) {
       return res.status(STATUS.BAD_REQUEST).json({
         error: "Name 255 & Description must not be 3000 charecter long",
       });
     }
-    // Validate Update Images
-    else if (editImages && editImages.length == 1) {
-      return res
-        .status(STATUS.BAD_REQUEST)
-        .json({ error: "Must need to provide 2 images" });
-    } else {
-      let editData = {
-        pName,
-        pDescription,
-        pPrice,
-        pQuantity,
-        pCategory,
-        pOffer,
-        pStatus,
-      };
-      if (editImages.length == 2) {
-        let allEditImages = [];
+
+    if (Object.keys(editData).length === 0 && editImages.length === 0) {
+      return res.status(STATUS.BAD_REQUEST).json({
+        error:
+          "Provide at least one field to update (pName, pDescription, pPrice, pQuantity, pCategory, pOffer, pStatus) or upload 2 images",
+      });
+    }
+
+    try {
+      const existing = await productModel.findById(pId);
+      if (!existing) {
+        return res
+          .status(STATUS.NOT_FOUND)
+          .json({ error: "Product not found" });
+      }
+
+      // If new images provided, upload them and delete old ones
+      if (editImages.length === 2) {
+        const allEditImages = [];
         for (const img of editImages) {
           const filename = await uploadImage(img, "products");
           allEditImages.push(filename);
         }
-        editData = { ...editData, pImages: allEditImages };
-        Product.deleteImages(pImages.split(","), "string");
-      }
-      try {
-        let editProduct = await productModel.findByIdAndUpdate(pId, editData);
-        if (editProduct) {
-          return res
-            .status(STATUS.OK)
-            .json({ success: "Product edit successfully" });
+        editData.pImages = allEditImages;
+        if (existing.pImages && existing.pImages.length) {
+          Product.deleteImages(existing.pImages, "string");
         }
-        return res
-          .status(STATUS.NOT_FOUND)
-          .json({ error: "Product not found" });
-      } catch (err) {
-        console.log(err);
-        return res
-          .status(STATUS.SERVER_ERROR)
-          .json({ error: "Failed to edit product" });
       }
+
+      const editProduct = await productModel.findByIdAndUpdate(pId, editData, {
+        new: true,
+      });
+      return res.status(STATUS.OK).json({
+        success: "Product edit successfully",
+        product: editProduct,
+      });
+    } catch (err) {
+      console.log(err);
+      return res
+        .status(STATUS.SERVER_ERROR)
+        .json({ error: "Failed to edit product" });
     }
   }
 

@@ -44,15 +44,25 @@ connectDB();
 // Middleware
 app.use(morgan("dev"));
 app.use(cookieParser());
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "https://cuan-shop-client-app.onrender.com",
-    ],
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: ["http://localhost:5173", "https://cuan-shop-client-app.onrender.com"],
+  credentials: true
+}));
+
+// Session and Passport
+const session = require("express-session");
+const passport = require("passport");
+
+app.use(session({
+  secret: process.env.JWT_SECRET || 'supersecretkey',
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+require("./config/passport")(passport);
+
 app.get("/uploads/:folder/:file", (req, res) => {
   const { folder, file } = req.params;
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;

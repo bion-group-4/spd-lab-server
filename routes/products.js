@@ -11,25 +11,25 @@ const upload = multer({ storage: storage });
 router.get("/", productController.getAllProduct);
 
 router.post(
-  "/",
-  loginCheck,
-  canManageInventory,
-  upload.any(),
-  productController.postAddProduct
+    "/",
+    loginCheck,
+    canManageInventory,
+    upload.any(),
+    productController.postAddProduct
 );
 
 router.put(
-  "/:id",
-  loginCheck,
-  canManageInventory,
-  upload.any(),
-  productController.postEditProduct
+    "/:id",
+    loginCheck,
+    canManageInventory,
+    upload.any(),
+    productController.postEditProduct
 );
 router.delete(
-  "/:id",
-  loginCheck,
-  canManageInventory,
-  productController.getDeleteProduct
+    "/:id",
+    loginCheck,
+    canManageInventory,
+    productController.getDeleteProduct
 );
 
 router.post("/wish", productController.getWishProduct);
